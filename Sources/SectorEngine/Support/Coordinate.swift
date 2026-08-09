@@ -6,7 +6,9 @@
 //
 
 import Foundation
+#if canImport(MapKit)
 import MapKit
+#endif
 #if canImport(CoreLocation)
 import CoreLocation
 #endif
