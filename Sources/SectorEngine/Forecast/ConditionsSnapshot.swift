@@ -20,7 +20,9 @@
 //
 
 import Foundation
+#if canImport(CoreLocation)
 import CoreLocation
+#endif
 
 /// The live inputs a conditions evaluation is built from.
 struct ConditionsSnapshot {

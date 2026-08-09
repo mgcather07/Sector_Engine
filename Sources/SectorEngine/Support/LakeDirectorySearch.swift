@@ -10,7 +10,9 @@
 //
 
 import Foundation
+#if canImport(CoreLocation)
 import CoreLocation
+#endif
 
 extension LakeDirectory {
 

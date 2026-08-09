@@ -8,7 +8,9 @@
 //
 
 import Foundation
+#if canImport(CoreLocation)
 import CoreLocation
+#endif
 
 /// The render-ready payload every client (iOS, Android, web) receives.
 public struct ConditionsResponse: Codable, Equatable {

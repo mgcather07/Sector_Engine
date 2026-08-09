@@ -33,7 +33,12 @@
 //
 
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+#if canImport(CoreLocation)
 import CoreLocation
+#endif
 
 /// The measured side of a dam, when CWMS carries it.
 struct CWMSObserved: Equatable {

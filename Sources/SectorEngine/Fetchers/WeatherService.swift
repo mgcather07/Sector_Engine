@@ -12,7 +12,12 @@
 //
 
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+#if canImport(CoreLocation)
 import CoreLocation
+#endif
 
 enum PressureTrend: Equatable {
     case rising

@@ -32,7 +32,9 @@
 //
 
 import Foundation
+#if canImport(CoreLocation)
 import CoreLocation
+#endif
 
 /// One day of the modeled series: modeled water temp and the daily-mean air
 /// temp that drove it. Air is carried so the chart can show water's lag.

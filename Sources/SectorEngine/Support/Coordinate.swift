@@ -7,7 +7,9 @@
 
 import Foundation
 import MapKit
+#if canImport(CoreLocation)
 import CoreLocation
+#endif
 
 struct Coordinate: Codable, Equatable {
     var latitude: Double

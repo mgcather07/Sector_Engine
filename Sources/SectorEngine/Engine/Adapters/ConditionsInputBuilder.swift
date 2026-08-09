@@ -14,7 +14,9 @@
 //
 
 import Foundation
+#if canImport(CoreLocation)
 import CoreLocation
+#endif
 
 public enum ConditionsInputBuilder {
 

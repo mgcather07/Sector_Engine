@@ -21,7 +21,9 @@
 //
 
 import Foundation
+#if canImport(CoreLocation)
 import CoreLocation
+#endif
 
 // MARK: - Output models
 

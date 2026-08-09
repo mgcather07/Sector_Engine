@@ -28,7 +28,12 @@
 //
 
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+#if canImport(CoreLocation)
 import CoreLocation
+#endif
 
 final class SWPAGenerationService: GenerationProvider {
     static let shared = SWPAGenerationService()

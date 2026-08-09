@@ -19,7 +19,9 @@
 //
 
 import Foundation
+#if canImport(CoreLocation)
 import CoreLocation
+#endif
 
 /// How much live data a lake can offer, straight from the sheet's
 /// `API Level` column. Routing, not decoration: `.dedicated` means an

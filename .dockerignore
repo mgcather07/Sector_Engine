@@ -1,0 +1,12 @@
+# Keep the build context tiny — only what the Dockerfile COPYs is needed.
+.build/
+.git/
+.gitignore
+*.xcodeproj
+*.xcworkspace
+.DS_Store
+.swiftpm/
+docs/
+README.md
+deploy.sh
+cloudbuild.yaml

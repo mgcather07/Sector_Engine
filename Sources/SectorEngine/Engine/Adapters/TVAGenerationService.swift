@@ -29,7 +29,12 @@
 //
 
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+#if canImport(CoreLocation)
 import CoreLocation
+#endif
 
 // MARK: - Service
 

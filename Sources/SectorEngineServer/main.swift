@@ -37,9 +37,11 @@ router.get("conditions") { request, _ -> Response in
         body: .init(byteBuffer: buffer))
 }
 
+// Cloud Run injects PORT and expects the server to bind 0.0.0.0 (all interfaces).
+// Locally, without PORT set, that's still reachable as localhost:8080 for the A/B.
 let port = ProcessInfo.processInfo.environment["PORT"].flatMap(Int.init) ?? 8080
 let app = Application(
     router: router,
-    configuration: .init(address: .hostname("127.0.0.1", port: port)))
+    configuration: .init(address: .hostname("0.0.0.0", port: port)))
 
 try await app.runService()
