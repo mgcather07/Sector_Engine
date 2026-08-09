@@ -1,7 +1,7 @@
 # ── Build stage ─────────────────────────────────────────────────────────────
 # Full Swift toolchain on Ubuntu 22.04 (jammy). This is where the Linux build of
 # the engine actually gets exercised — any Linux-only compile error surfaces here.
-FROM swift:6.0-jammy AS build
+FROM swift:6.1-jammy AS build
 WORKDIR /build
 
 # Resolve dependencies first so this layer caches across source-only changes.
@@ -21,7 +21,7 @@ RUN cp "$(swift build -c release --show-bin-path)/SectorEngineServer" /build/Sec
 # ── Runtime stage ───────────────────────────────────────────────────────────
 # Slim image: Swift runtime libraries, no compiler. Add TLS roots + timezone data
 # so HTTPS fetches (Open-Meteo, USGS, TVA…) and date math work.
-FROM swift:6.0-jammy-slim
+FROM swift:6.1-jammy-slim
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates tzdata \
     && rm -rf /var/lib/apt/lists/*
