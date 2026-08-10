@@ -107,9 +107,13 @@ final class WaterLevelService {
 
         guard let url = components?.url else { throw WaterLevelError.invalidURL }
 
+        // Bound the USGS fetch — the default request timeout is 60s, long enough for
+        // one slow gage to tentpole the whole parallel snapshot. A dropped reading
+        // just degrades the score slightly; a 60s hang blocks the response.
+        let request = URLRequest(url: url, timeoutInterval: 12)
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await URLSession.shared.data(from: url)
+            (data, response) = try await URLSession.shared.data(for: request)
         } catch {
             throw WaterLevelError.requestFailed
         }

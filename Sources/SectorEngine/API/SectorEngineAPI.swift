@@ -46,7 +46,15 @@ public enum SectorEngineAPI {
     public static func conditions(lat: Double, lon: Double, date: Date = Date()) async -> ConditionsResponse? {
         let coord = CLLocationCoordinate2D(latitude: lat, longitude: lon)
 
-        let snap = await ConditionsSnapshotProvider.shared.snapshot(for: coord)
+        // Fire the gauge snapshot and the 7-night forecast concurrently — they're
+        // independent, and the forecast's own snapshot fetch coalesces onto this
+        // one inside the provider, so nothing is fetched twice. Sequentially these
+        // were the two dominant waits; overlapped, the response is bounded by the
+        // slower of the two, not their sum.
+        async let snapTask = ConditionsSnapshotProvider.shared.snapshot(for: coord)
+        async let forecastTask = ConditionsForecastService.forecast(for: coord, now: date)
+
+        let snap = await snapTask
         guard snap.hasAnyLiveInput else { return nil }
 
         let input = ConditionsInputBuilder.build(
@@ -57,7 +65,7 @@ public enum SectorEngineAPI {
             alertWindFloorMph: snap.alertWindFloorMph)
         let result = ConditionsAggregator.evaluate(input)
 
-        let forecast = await ConditionsForecastService.forecast(for: coord, now: date)
+        let forecast = await forecastTask
         let tonight = forecast?.tonight.map {
             TonightDTO(headline: $0.headline, windowStart: $0.windowStart,
                        windowEnd: $0.windowEnd, peak: $0.peak)

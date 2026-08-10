@@ -108,6 +108,39 @@ struct ConditionsForecast: Equatable {
     let nights: [NightScore]
 }
 
+// MARK: - Server forecast cache
+
+/// Cross-request cache for the 7-night forecast on the server. The forecast is the
+/// heaviest part of a conditions call — its own Open-Meteo fetch plus a full
+/// re-score of every night — so on a warm instance we serve it from here: repeat
+/// requests within the freshness window skip the recompute entirely, and concurrent
+/// identical requests coalesce onto one computation. Mirrors the 30-minute freshness
+/// the @MainActor service uses for the app.
+actor ForecastCache {
+    static let shared = ForecastCache()
+
+    private var entries: [String: (forecast: ConditionsForecast, at: Date)] = [:]
+    private var inFlight: [String: Task<ConditionsForecast?, Never>] = [:]
+    private let maxAge: TimeInterval = 30 * 60
+
+    private func key(_ c: CLLocationCoordinate2D) -> String {
+        String(format: "%.2f,%.2f", c.latitude, c.longitude)
+    }
+
+    func forecast(for coordinate: CLLocationCoordinate2D, now: Date) async -> ConditionsForecast? {
+        let k = key(coordinate)
+        if let hit = entries[k], now.timeIntervalSince(hit.at) < maxAge { return hit.forecast }
+        if let running = inFlight[k] { return await running.value }
+
+        let task = Task { try? await ConditionsForecastService.fetchAndCompute(coordinate: coordinate, now: now) }
+        inFlight[k] = task
+        let result = await task.value
+        inFlight[k] = nil
+        if let result { entries[k] = (result, now) }
+        return result
+    }
+}
+
 // MARK: - Service
 
 @MainActor
@@ -191,14 +224,16 @@ final class ConditionsForecastService: ObservableObject {
 
     // MARK: Fetch
 
-    /// Compute a coordinate's forecast off the @MainActor service — used by the
-    /// Lake Alerts weekly digest (background). Returns nil on any fetch failure.
+    /// Compute a coordinate's forecast — cached and coalesced per rounded coordinate
+    /// (see `ForecastCache`) so a warm server doesn't recompute the 7-night outlook
+    /// for repeat or concurrent callers. Used by the API and the Lake Alerts weekly
+    /// digest. Returns nil on any fetch failure.
     static func forecast(for coordinate: CLLocationCoordinate2D, now: Date = Date()) async -> ConditionsForecast? {
-        try? await fetchAndCompute(coordinate: coordinate, now: now)
+        await ForecastCache.shared.forecast(for: coordinate, now: now)
     }
 
-    private static func fetchAndCompute(coordinate: CLLocationCoordinate2D,
-                                        now: Date) async throws -> ConditionsForecast {
+    static func fetchAndCompute(coordinate: CLLocationCoordinate2D,
+                                now: Date) async throws -> ConditionsForecast {
         // Open-Meteo hourly/daily + the same water readings the gauge uses, all
         // concurrently, so the forecast shares the gauge's exact inputs.
         // The hourly forecast is ours alone; the five live readings come from

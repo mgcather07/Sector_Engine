@@ -154,7 +154,7 @@ final class SWPAGenerationService: GenerationProvider {
         }
         guard let url = URL(string: "https://www.energy.gov/swpa/\(day).htm") else { return nil }
         var request = URLRequest(url: url)
-        request.timeoutInterval = 20
+        request.timeoutInterval = 12
         // energy.gov serves the schedule inside a normal page; a browsery UA
         // avoids the bot-challenge variant.
         request.setValue("Mozilla/5.0 (compatible; Sector/1.0)", forHTTPHeaderField: "User-Agent")
