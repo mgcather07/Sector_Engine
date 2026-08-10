@@ -259,8 +259,10 @@ final class ConditionsForecastService: ObservableObject {
             // correctly ignore a warning that's only in effect right now.
             alertWindFloorMph: snap.alertWindFloorMph)
 
+        // Same Remote Config tuning the gauge uses, so the 7-night stays in lockstep.
+        let config = await RemoteConfigStore.shared.current()
         return compute(r: r, base: base, coordinate: coordinate, now: now,
-                       generation: snap.generation, waterTempModel: snap.waterTempModel)
+                       generation: snap.generation, waterTempModel: snap.waterTempModel, config: config)
     }
 
     private static func fetchForecastResponse(_ coordinate: CLLocationCoordinate2D) async throws -> ForecastResponse {
