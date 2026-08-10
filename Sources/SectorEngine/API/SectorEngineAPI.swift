@@ -176,6 +176,15 @@ public struct NightDTO: Codable, Equatable {
     }
 }
 
+/// One slim per-coordinate result from the batch endpoint. `score`/`band` are nil
+/// when that coordinate had no live data to score.
+public struct BatchScore: Codable, Equatable {
+    public let lat: Double
+    public let lon: Double
+    public let score: Int?
+    public let band: String?
+}
+
 // MARK: - Entry point
 
 public enum SectorEngineAPI {
@@ -232,6 +241,46 @@ public enum SectorEngineAPI {
             tonight: forecast?.tonight.map(Self.tonightDTO),
             nights: (forecast?.nights ?? []).map(Self.nightDTO),
             generatedAt: Date())
+    }
+
+    /// Just the gauge score + band for a coordinate — snapshot + evaluate, NO
+    /// forecast (the expensive part). Powers the My Lakes list rings, where only
+    /// the number matters. Returns nil when there's no live data to score.
+    public static func score(lat: Double, lon: Double, date: Date = Date()) async -> (score: Int, band: String)? {
+        let coord = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+        let snap = await ConditionsSnapshotProvider.shared.snapshot(for: coord)
+        guard snap.hasAnyLiveInput else { return nil }
+        let input = ConditionsInputBuilder.build(
+            coordinate: coord, date: date,
+            weather: snap.weather, water: snap.water, discharge: snap.discharge,
+            waterTempC: snap.waterTemp, modeledWaterTempF: snap.waterTempModel?.currentF,
+            turbidity: snap.turbidity, generation: snap.generation,
+            alertWindFloorMph: snap.alertWindFloorMph)
+        let result = ConditionsAggregator.evaluate(input)
+        return (result.score, result.band.rawValue)
+    }
+
+    /// Score many coordinates in one request (My Lakes list). Bounded concurrency so
+    /// a long list can't fan out into a burst of upstream fetches; identical/nearby
+    /// coordinates coalesce + cache in the snapshot provider. Order is not preserved
+    /// — each result carries its own lat/lon so the client can match them up.
+    public static func batch(points: [(lat: Double, lon: Double)],
+                             date: Date = Date(), maxConcurrent: Int = 6) async -> [BatchScore] {
+        var results: [BatchScore] = []
+        var next = 0
+        await withTaskGroup(of: BatchScore.self) { group in
+            func addTask() {
+                guard next < points.count else { return }
+                let p = points[next]; next += 1
+                group.addTask {
+                    let s = await score(lat: p.lat, lon: p.lon, date: date)
+                    return BatchScore(lat: p.lat, lon: p.lon, score: s?.score, band: s?.band)
+                }
+            }
+            for _ in 0..<min(maxConcurrent, points.count) { addTask() }
+            for await r in group { results.append(r); addTask() }
+        }
+        return results
     }
 
     // MARK: Mappers
