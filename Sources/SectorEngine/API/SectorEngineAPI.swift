@@ -49,6 +49,7 @@ public struct ConditionsResponse: Codable, Equatable {
     public let water: WaterDTO?         // gage height / level
     public let discharge: WaterDTO?     // cfs
     public let generation: GenerationDTO?
+    public let waterTempModel: WaterTempModelDTO?
     public let moonIllumination: Double // 0…1, for "now"
     public let alerts: [AlertDTO]
 
@@ -109,6 +110,9 @@ public struct WaterDTO: Codable, Equatable {
 public struct GenerationDTO: Codable, Equatable {
     public let damName: String
     public let river: String
+    public let operatorId: String       // TVA | SWPA | USACE — clients render the authority label
+    public let latitude: Double
+    public let longitude: Double
     public let distanceMiles: Double
     public let dischargeCfs: Double?
     public let dischargeTrend12hCfs: Double?
@@ -124,6 +128,19 @@ public struct GenerationDTO: Codable, Equatable {
         public let isMinimum: Bool
         public let unitsAreDerived: Bool
         public let timeZoneIdentifier: String   // the DAM's zone; clients format in it
+    }
+}
+
+/// Modeled surface water temp — the current estimate plus the daily series that
+/// drives the water-temp detail chart (most waters have no live temp gage).
+public struct WaterTempModelDTO: Codable, Equatable {
+    public let currentF: Double
+    public let series: [Day]
+
+    public struct Day: Codable, Equatable {
+        public let date: Date
+        public let waterF: Double
+        public let airF: Double
     }
 }
 
@@ -236,6 +253,7 @@ public enum SectorEngineAPI {
             water: snap.water.map(Self.waterDTO),
             discharge: snap.discharge.map(Self.waterDTO),
             generation: snap.generation.map(Self.generationDTO),
+            waterTempModel: snap.waterTempModel.map(Self.waterTempModelDTO),
             moonIllumination: Astronomy.moonIllumination(on: date),
             alerts: snap.alerts.map(Self.alertDTO),
             tonight: forecast?.tonight.map(Self.tonightDTO),
@@ -302,7 +320,10 @@ public enum SectorEngineAPI {
 
     private static func generationDTO(_ g: DamGeneration) -> GenerationDTO {
         GenerationDTO(
-            damName: g.dam.name, river: g.dam.river, distanceMiles: g.distanceMiles,
+            damName: g.dam.name, river: g.dam.river,
+            operatorId: g.dam.operatorID.rawValue,
+            latitude: g.dam.latitude, longitude: g.dam.longitude,
+            distanceMiles: g.distanceMiles,
             dischargeCfs: g.dischargeCfs, dischargeTrend12hCfs: g.dischargeTrend12hCfs,
             reservoirElevationFt: g.reservoirElevationFt, tailwaterElevationFt: g.tailwaterElevationFt,
             observedAt: g.observedAt,
@@ -312,6 +333,12 @@ public enum SectorEngineAPI {
                     isMinimum: $0.isMinimum, unitsAreDerived: $0.unitsAreDerived,
                     timeZoneIdentifier: $0.timeZone.identifier)
             })
+    }
+
+    private static func waterTempModelDTO(_ m: WaterTempModel) -> WaterTempModelDTO {
+        WaterTempModelDTO(
+            currentF: m.currentF,
+            series: m.series.map { WaterTempModelDTO.Day(date: $0.date, waterF: $0.waterF, airF: $0.airF) })
     }
 
     private static func alertDTO(_ a: WeatherAlert) -> AlertDTO {
