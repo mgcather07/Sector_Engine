@@ -62,7 +62,30 @@ public struct ConditionsResponse: Codable, Equatable {
     /// nil when MRMS was unavailable (clarity fell back to Open-Meteo).
     public let clarityRain: ClarityRainDTO?
 
+    /// The USGS gauges behind the clarity estimate (turbidity + discharge) — site
+    /// identity, latest reading, trend and distance so the app can show and open
+    /// them. `driving` marks the gauge that actually informs the estimate.
+    public let clarityGauges: [GaugeDTO]
+
     public let generatedAt: Date
+}
+
+/// A USGS gauge surfaced to the app so the user can check the source behind the
+/// clarity estimate. Maps to an NWIS site page via `siteCode`.
+public struct GaugeDTO: Codable, Equatable {
+    public let siteCode: String          // USGS site number
+    public let siteName: String
+    public let parameterCode: String     // 63680 turbidity | 00060 discharge
+    public let parameterName: String
+    public let role: String              // "turbidity" | "discharge"
+    public let value: Double
+    public let unit: String
+    public let trend: String             // rising | falling | steady
+    public let change: Double
+    public let distanceMiles: Double?
+    public let latitude: Double
+    public let longitude: Double
+    public let driving: Bool             // actually informs the clarity estimate
 }
 
 /// Recent rainfall driving the clarity estimate, from NOAA MRMS via IEM.
@@ -312,6 +335,11 @@ public enum SectorEngineAPI {
                                source: "mrms",
                                daily: m.daily.map { RainDayDTO(date: $0.date, inches: $0.inches) })
             },
+            clarityGauges: [
+                snap.turbidity.map { Self.gaugeDTO($0, role: "turbidity",
+                    driving: ($0.distanceMiles ?? .infinity) <= ConditionsInputBuilder.maxTurbidityDistanceMiles) },
+                snap.discharge.map { Self.gaugeDTO($0, role: "discharge", driving: true) },
+            ].compactMap { $0 },
             generatedAt: Date())
     }
 
@@ -377,6 +405,15 @@ public enum SectorEngineAPI {
     private static func waterDTO(_ r: WaterLevelReading) -> WaterDTO {
         WaterDTO(value: r.value, unit: r.unit, trend: waterTrendString(r.trend),
                  change: r.change, history: r.history)
+    }
+
+    private static func gaugeDTO(_ r: WaterLevelReading, role: String, driving: Bool) -> GaugeDTO {
+        GaugeDTO(siteCode: r.siteCode, siteName: r.siteName,
+                 parameterCode: r.parameterCode, parameterName: r.parameterName,
+                 role: role, value: r.value, unit: r.unit,
+                 trend: waterTrendString(r.trend), change: r.change,
+                 distanceMiles: r.distanceMiles, latitude: r.latitude, longitude: r.longitude,
+                 driving: driving)
     }
 
     private static func generationDTO(_ g: DamGeneration) -> GenerationDTO {
