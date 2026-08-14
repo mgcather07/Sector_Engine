@@ -100,12 +100,30 @@ public struct WeatherDTO: Codable, Equatable {
     // Hourly barometric series (past + near-future), chronological. Powers the
     // pressure detail sheet's trend chart. Empty when hourly data was unavailable.
     public let pressureHourly: [PressureSampleDTO]
+    // Hourly conditions series (temp/humidity/wind/gust/dir/dewpoint/cloud/precip),
+    // past + near-future. Powers the Wind / Temperature / Humidity / Sky / rain
+    // detail charts. Empty when hourly data was unavailable.
+    public let hourlyConditions: [ConditionsHourlyDTO]
 }
 
 /// One hourly barometric reading. `hPa` is millibars; clients convert to inHg.
 public struct PressureSampleDTO: Codable, Equatable {
     public let time: Date
     public let hPa: Double
+}
+
+/// One hourly weather sample — feeds the wind / temperature / humidity / sky / rain
+/// trend charts. Every metric is nullable (a gap in the upstream data).
+public struct ConditionsHourlyDTO: Codable, Equatable {
+    public let time: Date
+    public let tempF: Double?
+    public let humidity: Double?
+    public let windMph: Double?
+    public let gustMph: Double?
+    public let windDir: Double?
+    public let dewPointF: Double?
+    public let cloudPct: Double?
+    public let precipIn: Double?
 }
 
 public struct WaterDTO: Codable, Equatable {
@@ -323,7 +341,12 @@ public enum SectorEngineAPI {
             recentRainfall: w.recentRainfall, humidity: w.humidity,
             pressure: w.pressure, pressureTrend: pressureTrendString(w.pressureTrend),
             pressureChange: w.pressureChange, cloudCover: w.cloudCover, weatherCode: w.weatherCode,
-            pressureHourly: w.pressureHistory.map { PressureSampleDTO(time: $0.date, hPa: $0.hPa) })
+            pressureHourly: w.pressureHistory.map { PressureSampleDTO(time: $0.date, hPa: $0.hPa) },
+            hourlyConditions: w.hourlyConditions.map {
+                ConditionsHourlyDTO(time: $0.date, tempF: $0.tempF, humidity: $0.humidity,
+                    windMph: $0.windMph, gustMph: $0.gustMph, windDir: $0.windDir,
+                    dewPointF: $0.dewPointF, cloudPct: $0.cloudPct, precipIn: $0.precipIn)
+            })
     }
 
     private static func waterDTO(_ r: WaterLevelReading) -> WaterDTO {
