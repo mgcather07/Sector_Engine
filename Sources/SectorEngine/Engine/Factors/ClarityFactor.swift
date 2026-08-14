@@ -26,14 +26,29 @@ public enum ClarityFactor {
             if input.turbidityType == .algal { secchi *= cfg.algalSecchiMultiplier }
             return Swift.max(0, secchi)
         }
-        // Fallback: clear-water baseline decayed by recent rain. Tailwaters and
-        // rivers blow out fast; a reservoir's main pool decays gently and holds a
-        // visibility floor — only its creek arms muddy up (§5.1).
-        let rain = Swift.max(0, input.rainLast48hIn)
+        // No gage → decay a clear-water baseline by RECENT RAIN. Prefer the MRMS
+        // radar-gauge 72 h total aggregated over the surrounding watershed (rain
+        // upstream muddies the lake even when the ramp stayed dry); fall back to
+        // the Open-Meteo 48 h point total only when MRMS is unavailable. §5.1.
+        //
+        // No-data guard: if NEITHER source answered, don't read the dry-baseline
+        // "clear" (the most optimistic possible guess) — return a neutral
+        // workable estimate so a missing signal can't score Prime.
+        if !input.rainDataAvailable && input.rainWatershed72hIn == nil {
+            return Swift.max(cfg.reservoirVisibilityFloorFt, cfg.fallbackBaseClearFt * 0.55)
+        }
+        let rain = Swift.max(0, input.rainWatershed72hIn ?? input.rainLast48hIn)
         if input.isTailwater {
             return cfg.fallbackBaseClearFt * exp(-cfg.fallbackRainDecayK * rain)
         }
-        let vis = cfg.fallbackBaseClearFt * exp(-cfg.reservoirRainDecayK * rain)
+        var vis = cfg.fallbackBaseClearFt * exp(-cfg.reservoirRainDecayK * rain)
+        // Rising upstream inflow is runoff on its way in — it muddies the arms
+        // before the rain total catches up. A strong 12 h discharge rise shaves a
+        // little sightline, bounded so it never dominates the rain signal.
+        if let trend = input.dischargeTrend12hCfs, trend > 0, let cfs = input.dischargeCfs, cfs > 0 {
+            let riseFrac = Swift.min(trend / cfs, 1.0)           // 0…1 of current flow
+            vis *= (1.0 - 0.25 * riseFrac)
+        }
         return Swift.max(cfg.reservoirVisibilityFloorFt, vis)
     }
 

@@ -46,7 +46,13 @@ public struct ConditionsInput: Equatable {
     public var dischargeTrend12hCfs: Double? // signed cfs over 12 h
     public var turbidityFNU: Double?
     public var turbidityType: TurbidityType
-    public var rainLast48hIn: Double         // fallback when no turbidity gage
+    public var rainLast48hIn: Double         // Open-Meteo point 48 h — fallback only
+    /// MRMS radar-gauge rain over the last 72 h, aggregated across the surrounding
+    /// watershed. Preferred clarity input when present (see ClarityFactor).
+    public var rainWatershed72hIn: Double?
+    /// False when NEITHER rain source answered — clarity must not then read the
+    /// dry-baseline "clear", which would be the most optimistic possible guess.
+    public var rainDataAvailable: Bool
 
     // MARK: Tailwater / current
     public var isTailwater: Bool
@@ -109,6 +115,8 @@ public struct ConditionsInput: Equatable {
                 turbidityFNU: Double? = nil,
                 turbidityType: TurbidityType = .unknown,
                 rainLast48hIn: Double = 0,
+                rainWatershed72hIn: Double? = nil,
+                rainDataAvailable: Bool = true,
                 isTailwater: Bool = false,
                 reservoirElevationFt: Double? = nil,
                 reservoirTrend12hFt: Double? = nil,
@@ -152,6 +160,8 @@ public struct ConditionsInput: Equatable {
         self.turbidityFNU = turbidityFNU
         self.turbidityType = turbidityType
         self.rainLast48hIn = rainLast48hIn
+        self.rainWatershed72hIn = rainWatershed72hIn
+        self.rainDataAvailable = rainDataAvailable
         self.isTailwater = isTailwater
         self.reservoirElevationFt = reservoirElevationFt
         self.reservoirTrend12hFt = reservoirTrend12hFt

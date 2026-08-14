@@ -257,7 +257,8 @@ final class ConditionsForecastService: ObservableObject {
             // Tonight (nights[0]) inherits any live severe-wind Warning floor so it
             // equals the gauge. Future nights are built from the hourly forecast and
             // correctly ignore a warning that's only in effect right now.
-            alertWindFloorMph: snap.alertWindFloorMph)
+            alertWindFloorMph: snap.alertWindFloorMph,
+            rainWatershed72hIn: snap.mrms?.watershed72hIn)
 
         // Same Remote Config tuning the gauge uses, so the 7-night stays in lockstep.
         let config = await RemoteConfigStore.shared.current()

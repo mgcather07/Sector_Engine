@@ -42,6 +42,10 @@ struct ConditionsSnapshot {
     /// number can never disagree. Fetched here in the SHARED snapshot so every
     /// surface (gauge, 7-night, lake alerts, trips) scores the same night the same.
     let alerts: [WeatherAlert]
+    /// MRMS radar-gauge rainfall (watershed 72 h + 14-day point series) for the
+    /// clarity model — catches localized/upstream rain Open-Meteo's point model
+    /// misses. nil when IEM is unreachable (clarity falls back to Open-Meteo).
+    let mrms: MrmsPrecip?
     let fetchedAt: Date
 
     /// With no weather AND no gage there's nothing real to score — callers use
@@ -98,6 +102,7 @@ actor ConditionsSnapshotProvider {
             async let turbidity = try? WaterLevelService.shared.nearestTurbidity(near: coordinate)
             async let generation = GenerationService.shared.generation(near: coordinate)
             async let alerts = WeatherAlertsService.shared.activeAlerts(near: coordinate)
+            async let mrms = MrmsPrecipService.shared.recent(near: coordinate)
             return ConditionsSnapshot(weather: await weather,
                                       water: await water,
                                       discharge: await discharge,
@@ -106,6 +111,7 @@ actor ConditionsSnapshotProvider {
                                       turbidity: await turbidity,
                                       generation: await generation,
                                       alerts: await alerts,
+                                      mrms: await mrms,
                                       fetchedAt: Date())
         }
         inFlight[k] = task

@@ -62,7 +62,8 @@ public enum ConditionsInputBuilder {
                       generation: DamGeneration? = nil,
                       alertWindFloorMph: Double? = nil,
                       forecastDayIndex: Int = 0,
-                      cityGlow: Double? = nil) -> ConditionsInput {
+                      cityGlow: Double? = nil,
+                      rainWatershed72hIn: Double? = nil) -> ConditionsInput {
 
         let lat = coordinate.latitude, lon = coordinate.longitude
         let region = RegionResolver.region(latitude: lat, longitude: lon)
@@ -232,6 +233,8 @@ public enum ConditionsInputBuilder {
             turbidityFNU: turbidity?.value,
             turbidityType: .unknown,
             rainLast48hIn: weather?.recentRainfall ?? 0,
+            rainWatershed72hIn: rainWatershed72hIn,
+            rainDataAvailable: rainWatershed72hIn != nil || weather != nil,
             isTailwater: isTailwater,
             reservoirElevationFt: generation?.reservoirElevationFt,
             reservoirTrend12hFt: reservoirTrend12hFt,

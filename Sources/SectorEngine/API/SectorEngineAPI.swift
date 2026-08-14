@@ -57,7 +57,25 @@ public struct ConditionsResponse: Codable, Equatable {
     public let tonight: TonightDTO?
     public let nights: [NightDTO]
 
+    /// MRMS radar-gauge rainfall behind the clarity estimate — the real recent
+    /// rain (watershed-aggregated) plus a daily series for the sightline chart.
+    /// nil when MRMS was unavailable (clarity fell back to Open-Meteo).
+    public let clarityRain: ClarityRainDTO?
+
     public let generatedAt: Date
+}
+
+/// Recent rainfall driving the clarity estimate, from NOAA MRMS via IEM.
+public struct ClarityRainDTO: Codable, Equatable {
+    public let watershed72hIn: Double     // aggregated across the surrounding watershed
+    public let point72hIn: Double         // at the coordinate itself
+    public let source: String             // "mrms"
+    public let daily: [RainDayDTO]        // point, oldest → newest (~14 days)
+}
+
+public struct RainDayDTO: Codable, Equatable {
+    public let date: Date
+    public let inches: Double
 }
 
 // MARK: - Breakdown DTOs
@@ -253,7 +271,8 @@ public enum SectorEngineAPI {
             weather: snap.weather, water: snap.water, discharge: snap.discharge,
             waterTempC: snap.waterTemp, modeledWaterTempF: snap.waterTempModel?.currentF,
             turbidity: snap.turbidity, generation: snap.generation,
-            alertWindFloorMph: snap.alertWindFloorMph)
+            alertWindFloorMph: snap.alertWindFloorMph,
+            rainWatershed72hIn: snap.mrms?.watershed72hIn)
         // Tuning comes from Firebase Remote Config (cached; falls back to the
         // compiled defaults). Change a weight in the console → both phones see it.
         let config = await RemoteConfigStore.shared.current()
@@ -288,6 +307,11 @@ public enum SectorEngineAPI {
             alerts: snap.alerts.map(Self.alertDTO),
             tonight: forecast?.tonight.map(Self.tonightDTO),
             nights: (forecast?.nights ?? []).map(Self.nightDTO),
+            clarityRain: snap.mrms.map { m in
+                ClarityRainDTO(watershed72hIn: m.watershed72hIn, point72hIn: m.point72hIn,
+                               source: "mrms",
+                               daily: m.daily.map { RainDayDTO(date: $0.date, inches: $0.inches) })
+            },
             generatedAt: Date())
     }
 
@@ -303,7 +327,8 @@ public enum SectorEngineAPI {
             weather: snap.weather, water: snap.water, discharge: snap.discharge,
             waterTempC: snap.waterTemp, modeledWaterTempF: snap.waterTempModel?.currentF,
             turbidity: snap.turbidity, generation: snap.generation,
-            alertWindFloorMph: snap.alertWindFloorMph)
+            alertWindFloorMph: snap.alertWindFloorMph,
+            rainWatershed72hIn: snap.mrms?.watershed72hIn)
         let result = ConditionsAggregator.evaluate(input, config: await RemoteConfigStore.shared.current())
         return (result.score, result.band.rawValue)
     }
