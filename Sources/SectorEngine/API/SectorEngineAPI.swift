@@ -97,6 +97,15 @@ public struct WeatherDTO: Codable, Equatable {
     public let pressureChange: Double     // signed hPa over the lookback
     public let cloudCover: Double         // %
     public let weatherCode: Int           // WMO
+    // Hourly barometric series (past + near-future), chronological. Powers the
+    // pressure detail sheet's trend chart. Empty when hourly data was unavailable.
+    public let pressureHourly: [PressureSampleDTO]
+}
+
+/// One hourly barometric reading. `hPa` is millibars; clients convert to inHg.
+public struct PressureSampleDTO: Codable, Equatable {
+    public let time: Date
+    public let hPa: Double
 }
 
 public struct WaterDTO: Codable, Equatable {
@@ -313,7 +322,8 @@ public enum SectorEngineAPI {
             windDirection: w.windDirection, precipitation: w.precipitation,
             recentRainfall: w.recentRainfall, humidity: w.humidity,
             pressure: w.pressure, pressureTrend: pressureTrendString(w.pressureTrend),
-            pressureChange: w.pressureChange, cloudCover: w.cloudCover, weatherCode: w.weatherCode)
+            pressureChange: w.pressureChange, cloudCover: w.cloudCover, weatherCode: w.weatherCode,
+            pressureHourly: w.pressureHistory.map { PressureSampleDTO(time: $0.date, hPa: $0.hPa) })
     }
 
     private static func waterDTO(_ r: WaterLevelReading) -> WaterDTO {
