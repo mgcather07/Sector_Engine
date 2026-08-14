@@ -43,28 +43,73 @@ final class MrmsPrecipService {
     func recent(near coordinate: CLLocationCoordinate2D, now: Date = Date()) async -> MrmsPrecip? {
         let lat = coordinate.latitude, lon = coordinate.longitude
         async let pt = daily(lat: lat, lon: lon, days: historyDays, now: now)
-        // Four surrounding samples for the watershed signal.
+        // Four surrounding samples for the watershed signal (completed days only).
         let d = ringOffsetDeg
-        async let n = last72(lat: lat + d, lon: lon, now: now)
-        async let s = last72(lat: lat - d, lon: lon, now: now)
-        async let e = last72(lat: lat, lon: lon + d, now: now)
-        async let w = last72(lat: lat, lon: lon - d, now: now)
+        async let n = completed48(lat: lat + d, lon: lon, now: now)
+        async let s = completed48(lat: lat - d, lon: lon, now: now)
+        async let e = completed48(lat: lat, lon: lon + d, now: now)
+        async let w = completed48(lat: lat, lon: lon - d, now: now)
+        // TODAY's rain — IEMRE lags a day, so today's bucket never exists there.
+        // Open-Meteo carries the current day (coarser, but it's the only current
+        // source without parsing real-time MRMS GRIB2). Point-only; runoff from
+        // today's rain takes time to reach the lake anyway.
+        async let today = todayPrecipIn(lat: lat, lon: lon, now: now)
 
         guard let ptDaily = await pt, !ptDaily.isEmpty else { return nil }
-        let point72 = ptDaily.suffix(3).reduce(0) { $0 + $1.inches }
+        let todayIn = await today ?? 0
+        // A true 72h ending now: today (so far) + the two completed days behind it.
+        let completedPoint = ptDaily.suffix(2).reduce(0) { $0 + $1.inches }
+        let point72 = todayIn + completedPoint
         let ring = [await n, await s, await e, await w].compactMap { $0 }
         let ringMax = ring.max() ?? 0
         let ringMean = ring.isEmpty ? 0 : ring.reduce(0, +) / Double(ring.count)
-        // Surrounding rain that reaches the lake counts even if the ramp was dry:
-        // take the strongest nearby cell (dampened) or the ring mean, but never
-        // less than the point itself.
-        let watershed = Swift.max(point72, 0.7 * ringMax, ringMean)
-        return MrmsPrecip(watershed72hIn: watershed, point72hIn: point72, daily: ptDaily)
+        // Surrounding rain that reaches the lake counts even if the ramp was dry.
+        let watershed = todayIn + Swift.max(completedPoint, 0.7 * ringMax, ringMean)
+
+        // Append today to the daily series so the sightline chart reaches "now".
+        var series = ptDaily
+        let startOfToday = Calendar(identifier: .gregorian).startOfDay(for: now)
+        if series.last?.date != startOfToday {
+            series.append(MrmsPrecip.DailyRain(date: startOfToday, inches: todayIn))
+        }
+        return MrmsPrecip(watershed72hIn: watershed, point72hIn: point72, daily: series)
     }
 
-    private func last72(lat: Double, lon: Double, now: Date) async -> Double? {
+    /// The two completed days behind today (the completed part of a 72h window).
+    private func completed48(lat: Double, lon: Double, now: Date) async -> Double? {
         guard let d = await daily(lat: lat, lon: lon, days: 4, now: now) else { return nil }
-        return d.suffix(3).reduce(0) { $0 + $1.inches }
+        return d.suffix(2).reduce(0) { $0 + $1.inches }
+    }
+
+    /// Today's rainfall so far (inches) from Open-Meteo — the current-day layer
+    /// IEMRE can't provide yet. Uses observed hourly precip up to `now`.
+    private func todayPrecipIn(lat: Double, lon: Double, now: Date) async -> Double? {
+        var comp = URLComponents(string: "https://api.open-meteo.com/v1/forecast")
+        comp?.queryItems = [
+            URLQueryItem(name: "latitude", value: String(format: "%.4f", lat)),
+            URLQueryItem(name: "longitude", value: String(format: "%.4f", lon)),
+            URLQueryItem(name: "hourly", value: "precipitation"),
+            URLQueryItem(name: "past_days", value: "1"),
+            URLQueryItem(name: "forecast_days", value: "1"),
+            URLQueryItem(name: "precipitation_unit", value: "inch"),
+            URLQueryItem(name: "timeformat", value: "unixtime"),
+            URLQueryItem(name: "timezone", value: "GMT"),
+        ]
+        guard let url = comp?.url else { return nil }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 12
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return nil }
+        struct Resp: Decodable { let hourly: Hourly?; struct Hourly: Decodable { let time: [Int]; let precipitation: [Double?] } }
+        guard let decoded = try? JSONDecoder().decode(Resp.self, from: data), let h = decoded.hourly else { return nil }
+        let startOfDay = Calendar(identifier: .gregorian).startOfDay(for: now).timeIntervalSince1970
+        let nowTs = now.timeIntervalSince1970
+        var sum = 0.0
+        for (i, t) in h.time.enumerated() where i < h.precipitation.count {
+            let ts = Double(t)
+            if ts >= startOfDay && ts <= nowTs { sum += h.precipitation[i] ?? 0 }
+        }
+        return Swift.max(0, sum)
     }
 
     private struct IEMREResponse: Decodable {
