@@ -44,8 +44,8 @@ public enum ConditionsBand: String, Equatable {
     public init(score: Int) {
         switch score {
         case 80...:   self = .prime
-        case 60..<80: self = .good
-        case 40..<60: self = .fair
+        case 65..<80: self = .good
+        case 50..<65: self = .fair
         default:      self = .poor
         }
     }
