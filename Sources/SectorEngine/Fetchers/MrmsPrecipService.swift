@@ -20,7 +20,9 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+#if canImport(CoreLocation)
 import CoreLocation
+#endif   // Linux falls back to the engine's CoreLocationShim (CLLocationCoordinate2D).
 
 /// Rainfall the clarity model actually needs: a watershed-aggregated 72 h total,
 /// plus the point's daily series for the sightline trend chart.
