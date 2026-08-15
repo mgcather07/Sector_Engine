@@ -530,7 +530,7 @@ final class ConditionsForecastService: ObservableObject {
                     ScoreFactor(key: $0.key.rawValue, detail: $0.label, sub: $0.score, weight: $0.weightPct)
                 }
                 let ribbon = buildRibbon(evening: evening, ni: base, hourly: hourly,
-                                         coordinate: coordinate, cal: cal, config: config)
+                                         coordinate: coordinate, utcOffset: r.utc_offset_seconds ?? 0, config: config)
                 nights.append(NightScore(date: evening, score: res.score,
                                          moonIllumination: base.moonIllumPct / 100,
                                          windMax: base.windMph, weatherCode: base.weatherCode,
@@ -627,7 +627,7 @@ final class ConditionsForecastService: ObservableObject {
                 ScoreFactor(key: $0.key.rawValue, detail: $0.label, sub: $0.score, weight: $0.weightPct)
             }
             let ribbon = buildRibbon(evening: evening, ni: ni, hourly: hourly,
-                                     coordinate: coordinate, cal: cal, config: config)
+                                     coordinate: coordinate, utcOffset: r.utc_offset_seconds ?? 0, config: config)
             nights.append(NightScore(date: evening, score: res.score, moonIllumination: illum,
                                      windMax: wind, weatherCode: code, precip: precip,
                                      precipProbability: pop,
@@ -645,14 +645,18 @@ final class ConditionsForecastService: ObservableObject {
     /// jumps when the moon sets — plus the exact moonset inside the window.
     /// `ni` carries the night's slow-moving inputs (clarity, temp, level, regime).
     private static func buildRibbon(evening: Date, ni: ConditionsInput, hourly: [HourSample],
-                                    coordinate: CLLocationCoordinate2D, cal: Calendar,
+                                    coordinate: CLLocationCoordinate2D, utcOffset: Int,
                                     config: ConditionsConfig) -> (points: [HourPoint], moonset: Date?) {
         let lat = coordinate.latitude, lon = coordinate.longitude
-        // Anchor 8 PM LOCAL. `evening` is 9 PM local (parsed from Open-Meteo's
-        // timezone=auto feed), so 8 PM is one hour before — derived from the
-        // instant, NOT cal.startOfDay, which on the server (UTC) would put the
-        // window 5 h off and label the ribbon 3 PM–12 AM.
-        let start = evening.addingTimeInterval(-3600)
+        // Two clocks. `evening` and the HourSamples are local wall-clock parsed as
+        // naive-UTC (the server runs in UTC), so 8 PM wall-clock is `evening - 1h`
+        // in that NAIVE frame — used only to match the weather samples. Astronomy
+        // (moon altitude / moonset) and the emitted instants need the TRUE moment,
+        // which is the wall-clock shifted by the lake's UTC offset. Without this
+        // the ribbon labels 3 PM–12 AM and the moon never sets mid-window.
+        let naiveStart = evening.addingTimeInterval(-3600)                 // 8 PM wall-clock, naive
+        let toTrue = -Double(utcOffset)                                    // naive → true instant
+        let trueStart = naiveStart.addingTimeInterval(toTrue)             // 8 PM local, real moment
 
         func sample(near t: Date) -> HourSample? {
             guard let nearest = hourly.min(by: {
@@ -663,9 +667,10 @@ final class ConditionsForecastService: ObservableObject {
 
         var points: [HourPoint] = []
         for h in 0..<10 {
-            let hourStart = start.addingTimeInterval(Double(h) * 3600)
-            let mid = hourStart.addingTimeInterval(1800)
-            let s = sample(near: mid)
+            let naiveMid = naiveStart.addingTimeInterval(Double(h) * 3600 + 1800)
+            let trueHourStart = trueStart.addingTimeInterval(Double(h) * 3600)
+            let trueMid = trueHourStart.addingTimeInterval(1800)
+            let s = sample(near: naiveMid)
             let wind = s?.wind ?? ni.windMph
             let cloud = s?.cloud ?? ni.cloudPct
             let precip = s?.precip ?? 0
@@ -673,19 +678,19 @@ final class ConditionsForecastService: ObservableObject {
             let code = s.map { WeatherService.sanitizedWeatherCode($0.code, precipitation: precip, cloudCover: cloud) }
                 ?? ni.weatherCode
 
-            let altDeg = Astronomy.moonAltitudeDeg(at: mid, lat: lat, lon: lon)
+            let altDeg = Astronomy.moonAltitudeDeg(at: trueMid, lat: lat, lon: lon)
             let moonUp = altDeg > 0
 
             var hi = ni
-            hi.date = mid
+            hi.date = trueMid
             hi.windMph = wind
             hi.cloudPct = cloud
             hi.weatherCode = code
             hi.humidityPct = humidity
             hi.precipitationInchNow = precip
-            hi.moonAltitudeAtWindow = Astronomy.moonAltitudeFraction(from: hourStart, to: hourStart.addingTimeInterval(3600), lat: lat, lon: lon)
-            hi.windowStart = hourStart
-            hi.windowEnd = hourStart.addingTimeInterval(3600)
+            hi.moonAltitudeAtWindow = Astronomy.moonAltitudeFraction(from: trueHourStart, to: trueHourStart.addingTimeInterval(3600), lat: lat, lon: lon)
+            hi.windowStart = trueHourStart
+            hi.windowEnd = trueHourStart.addingTimeInterval(3600)
             let score = ConditionsAggregator.evaluate(hi, config: config).score
 
             // Fog risk — radiation fog forms on calm, clear, humid nights, mostly
@@ -698,16 +703,17 @@ final class ConditionsForecastService: ObservableObject {
             else if humidity >= 86 && wind < 6 && cloud < 60 && h >= 4 { fogRisk = 1 }
             else { fogRisk = 0 }
 
-            points.append(HourPoint(hour: hourStart, score: score, windMph: wind, moonUp: moonUp, fogRisk: fogRisk))
+            points.append(HourPoint(hour: trueHourStart, score: score, windMph: wind, moonUp: moonUp, fogRisk: fogRisk))
         }
 
-        // Moonset inside the window: first descending zero-crossing of altitude.
+        // Moonset inside the window: first descending zero-crossing of altitude,
+        // scanned in TRUE time so the tick lands at the real moment.
         var moonset: Date?
         let step: TimeInterval = 5 * 60
-        var prevT = start
+        var prevT = trueStart
         var prevAlt = Astronomy.moonAltitudeDeg(at: prevT, lat: lat, lon: lon)
-        var t = start.addingTimeInterval(step)
-        let end = start.addingTimeInterval(10 * 3600)
+        var t = trueStart.addingTimeInterval(step)
+        let end = trueStart.addingTimeInterval(10 * 3600)
         while t <= end {
             let alt = Astronomy.moonAltitudeDeg(at: t, lat: lat, lon: lon)
             if prevAlt > 0, alt <= 0 {
@@ -777,6 +783,10 @@ private extension Int {
 struct ForecastResponse: Decodable {
     let hourly: Hourly
     let daily: Daily
+    // Lake's offset from UTC (timezone=auto). The hourly/daily strings are local
+    // wall-clock parsed as naive-UTC, so this converts a wall-clock hour to its
+    // true instant for astronomy (moon altitude / moonset in the ribbon).
+    let utc_offset_seconds: Int? = nil
 
     struct Hourly: Decodable {
         let time: [String]
