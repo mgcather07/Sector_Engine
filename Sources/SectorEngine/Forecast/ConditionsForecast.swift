@@ -69,6 +69,17 @@ struct ScoreFactor: Equatable {
     let weight: Int      // active (regime) weight, percent
 }
 
+/// One hour of the night-detail ribbon (8 PM → 5 AM). `score` is the engine
+/// evaluated at that hour's wind/sky + the moon's altitude then, so the shape
+/// shows the score jumping when the moon sets. `fogRisk`: 0 none, 1 low, 2 high.
+struct HourPoint: Equatable {
+    let hour: Date
+    let score: Int
+    let windMph: Double
+    let moonUp: Bool
+    let fogRisk: Int
+}
+
 struct NightScore: Identifiable, Equatable {
     let date: Date            // the evening's date
     let score: Int            // 0...100 (same engine as the gauge)
@@ -81,17 +92,23 @@ struct NightScore: Identifiable, Equatable {
     let confidence: Int       // 0...100 — drives the far-out fade
     let regime: ConditionsRegime
     let topReasons: [String]  // why the score is what it is (incl. any cap)
+    /// Hour-by-hour ribbon across the fishing window; empty if not computed.
+    let hourly: [HourPoint]
+    /// Moonset within the night window, if the moon sets while it's dark.
+    let moonset: Date?
     var id: Date { date }
 
     init(date: Date, score: Int, moonIllumination: Double, windMax: Double,
          weatherCode: Int, precip: Double, precipProbability: Int? = nil,
          factors: [ScoreFactor],
-         confidence: Int = 100, regime: ConditionsRegime = .normal, topReasons: [String] = []) {
+         confidence: Int = 100, regime: ConditionsRegime = .normal, topReasons: [String] = [],
+         hourly: [HourPoint] = [], moonset: Date? = nil) {
         self.date = date; self.score = score; self.moonIllumination = moonIllumination
         self.windMax = windMax; self.weatherCode = weatherCode; self.precip = precip
         self.precipProbability = precipProbability
         self.factors = factors; self.confidence = confidence; self.regime = regime
         self.topReasons = topReasons
+        self.hourly = hourly; self.moonset = moonset
     }
 
     /// Banding aligned with the gauge (ConditionsBand: 80/60/40).
@@ -276,7 +293,7 @@ final class ConditionsForecastService: ObservableObject {
         let data = try await WeatherService.fetchForecastData(queryItems: [
             URLQueryItem(name: "latitude", value: String(format: "%.4f", coordinate.latitude)),
             URLQueryItem(name: "longitude", value: String(format: "%.4f", coordinate.longitude)),
-            URLQueryItem(name: "hourly", value: "wind_speed_10m,cloud_cover,precipitation,weather_code"),
+            URLQueryItem(name: "hourly", value: "wind_speed_10m,cloud_cover,precipitation,weather_code,relative_humidity_2m"),
             URLQueryItem(name: "daily", value: "sunrise,sunset,wind_speed_10m_max,weather_code,precipitation_sum,precipitation_probability_max,cloud_cover_mean"),
             URLQueryItem(name: "past_days", value: "1"),
             URLQueryItem(name: "forecast_days", value: "8"),
@@ -289,7 +306,7 @@ final class ConditionsForecastService: ObservableObject {
 
     // MARK: Compute
 
-    struct HourSample { let date: Date; let wind: Double; let cloud: Double; let precip: Double; let code: Int }
+    struct HourSample { let date: Date; let wind: Double; let cloud: Double; let precip: Double; let code: Int; let humidity: Double }
 
     static func compute(r: ForecastResponse, base: ConditionsInput,
                         coordinate: CLLocationCoordinate2D, now: Date = Date(),
@@ -307,7 +324,8 @@ final class ConditionsForecastService: ObservableObject {
             let precip = (r.hourly.precipitation[safe: i] ?? nil) ?? 0
             let rawCode = (r.hourly.weather_code[safe: i] ?? nil) ?? 0
             let code = WeatherService.sanitizedWeatherCode(rawCode, precipitation: precip, cloudCover: cloud)
-            hourly.append(HourSample(date: d, wind: wind, cloud: cloud, precip: precip, code: code))
+            let humidity = (r.hourly.relative_humidity_2m?[safe: i] ?? nil) ?? 0
+            hourly.append(HourSample(date: d, wind: wind, cloud: cloud, precip: precip, code: code, humidity: humidity))
         }
 
         let tonight = buildTonight(base: base, hourly: hourly, coordinate: coordinate,
@@ -511,12 +529,15 @@ final class ConditionsForecastService: ObservableObject {
                 let factors = res.factors.map {
                     ScoreFactor(key: $0.key.rawValue, detail: $0.label, sub: $0.score, weight: $0.weightPct)
                 }
+                let ribbon = buildRibbon(evening: evening, ni: base, hourly: hourly,
+                                         coordinate: coordinate, cal: cal, config: config)
                 nights.append(NightScore(date: evening, score: res.score,
                                          moonIllumination: base.moonIllumPct / 100,
                                          windMax: base.windMph, weatherCode: base.weatherCode,
                                          precip: base.precipitationInchNow, precipProbability: pop,
                                          factors: factors, confidence: res.confidence,
-                                         regime: res.regime, topReasons: res.topReasons))
+                                         regime: res.regime, topReasons: res.topReasons,
+                                         hourly: ribbon.points, moonset: ribbon.moonset))
                 continue
             }
 
@@ -605,13 +626,96 @@ final class ConditionsForecastService: ObservableObject {
             let factors = res.factors.map {
                 ScoreFactor(key: $0.key.rawValue, detail: $0.label, sub: $0.score, weight: $0.weightPct)
             }
+            let ribbon = buildRibbon(evening: evening, ni: ni, hourly: hourly,
+                                     coordinate: coordinate, cal: cal, config: config)
             nights.append(NightScore(date: evening, score: res.score, moonIllumination: illum,
                                      windMax: wind, weatherCode: code, precip: precip,
                                      precipProbability: pop,
                                      factors: factors, confidence: res.confidence, regime: res.regime,
-                                     topReasons: res.topReasons))
+                                     topReasons: res.topReasons,
+                                     hourly: ribbon.points, moonset: ribbon.moonset))
         }
         return nights
+    }
+
+    // MARK: Night ribbon (hour-by-hour)
+
+    /// The night-detail ribbon: 10 hours 8 PM → 5 AM, each scored by the engine at
+    /// that hour's wind/sky and the moon's altitude then — so the score visibly
+    /// jumps when the moon sets — plus the exact moonset inside the window.
+    /// `ni` carries the night's slow-moving inputs (clarity, temp, level, regime).
+    private static func buildRibbon(evening: Date, ni: ConditionsInput, hourly: [HourSample],
+                                    coordinate: CLLocationCoordinate2D, cal: Calendar,
+                                    config: ConditionsConfig) -> (points: [HourPoint], moonset: Date?) {
+        let lat = coordinate.latitude, lon = coordinate.longitude
+        // Anchor 8 PM on the evening's calendar day (evening itself is ~21:00).
+        let dayStart = cal.startOfDay(for: evening)
+        guard let start = cal.date(byAdding: .hour, value: 20, to: dayStart) else { return ([], nil) }
+
+        func sample(near t: Date) -> HourSample? {
+            guard let nearest = hourly.min(by: {
+                abs($0.date.timeIntervalSince(t)) < abs($1.date.timeIntervalSince(t))
+            }) else { return nil }
+            return abs(nearest.date.timeIntervalSince(t)) <= 45 * 60 ? nearest : nil
+        }
+
+        var points: [HourPoint] = []
+        for h in 0..<10 {
+            let hourStart = start.addingTimeInterval(Double(h) * 3600)
+            let mid = hourStart.addingTimeInterval(1800)
+            let s = sample(near: mid)
+            let wind = s?.wind ?? ni.windMph
+            let cloud = s?.cloud ?? ni.cloudPct
+            let precip = s?.precip ?? 0
+            let humidity = s?.humidity ?? ni.humidityPct
+            let code = s.map { WeatherService.sanitizedWeatherCode($0.code, precipitation: precip, cloudCover: cloud) }
+                ?? ni.weatherCode
+
+            let altDeg = Astronomy.moonAltitudeDeg(at: mid, lat: lat, lon: lon)
+            let moonUp = altDeg > 0
+
+            var hi = ni
+            hi.date = mid
+            hi.windMph = wind
+            hi.cloudPct = cloud
+            hi.weatherCode = code
+            hi.humidityPct = humidity
+            hi.precipitationInchNow = precip
+            hi.moonAltitudeAtWindow = Astronomy.moonAltitudeFraction(from: hourStart, to: hourStart.addingTimeInterval(3600), lat: lat, lon: lon)
+            hi.windowStart = hourStart
+            hi.windowEnd = hourStart.addingTimeInterval(3600)
+            let score = ConditionsAggregator.evaluate(hi, config: config).score
+
+            // Fog risk — radiation fog forms on calm, clear, humid nights, mostly
+            // after midnight. WMO 45/48 is reported fog (high). Otherwise a
+            // dewpoint-proxy from humidity + a calm/clear/late gate.
+            let late = h >= 5     // 1 AM and after
+            let fogRisk: Int
+            if code == 45 || code == 48 { fogRisk = 2 }
+            else if humidity >= 92 && wind < 4 && cloud < 45 && late { fogRisk = 2 }
+            else if humidity >= 86 && wind < 6 && cloud < 60 && h >= 4 { fogRisk = 1 }
+            else { fogRisk = 0 }
+
+            points.append(HourPoint(hour: hourStart, score: score, windMph: wind, moonUp: moonUp, fogRisk: fogRisk))
+        }
+
+        // Moonset inside the window: first descending zero-crossing of altitude.
+        var moonset: Date?
+        let step: TimeInterval = 5 * 60
+        var prevT = start
+        var prevAlt = Astronomy.moonAltitudeDeg(at: prevT, lat: lat, lon: lon)
+        var t = start.addingTimeInterval(step)
+        let end = start.addingTimeInterval(10 * 3600)
+        while t <= end {
+            let alt = Astronomy.moonAltitudeDeg(at: t, lat: lat, lon: lon)
+            if prevAlt > 0, alt <= 0 {
+                let frac = prevAlt / (prevAlt - alt)   // 0…1 between prevT and t
+                moonset = prevT.addingTimeInterval(step * frac)
+                break
+            }
+            prevT = t; prevAlt = alt; t = t.addingTimeInterval(step)
+        }
+        return (points, moonset)
     }
 
     // MARK: Helpers
@@ -678,6 +782,8 @@ struct ForecastResponse: Decodable {
         let cloud_cover: [Double?]
         let precipitation: [Double?]
         let weather_code: [Int?]
+        // Optional so a pre-update cached payload still decodes; drives fog risk.
+        let relative_humidity_2m: [Double?]? = nil
     }
     struct Daily: Decodable {
         let time: [String]
@@ -688,7 +794,7 @@ struct ForecastResponse: Decodable {
         let precipitation_sum: [Double?]
         // % chance of measurable rain that day. Optional so a host that omits it
         // still decodes; nil elements are common when Open-Meteo has no POP.
-        let precipitation_probability_max: [Int?]?
+        let precipitation_probability_max: [Int?]? = nil
         let cloud_cover_mean: [Double?]?
     }
 }
