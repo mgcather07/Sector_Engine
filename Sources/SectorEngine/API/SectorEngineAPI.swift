@@ -263,12 +263,24 @@ public struct NightDTO: Codable, Equatable {
     public let regime: String
     public let topReasons: [String]
     public let factors: [NightFactorDTO]
+    // The night-detail hour-by-hour ribbon + exact moonset. Optional so a
+    // pre-update client still decodes; empty/nil when not computed.
+    public let hourly: [HourPointDTO]?
+    public let moonset: Date?
 
     public struct NightFactorDTO: Codable, Equatable {
         public let key: String            // FactorKey rawValue (forecast vocabulary)
         public let detail: String         // human value, e.g. "74% lit"
         public let sub: Int               // 0…100
         public let weight: Int            // active regime weight, %
+    }
+
+    public struct HourPointDTO: Codable, Equatable {
+        public let hour: Date
+        public let score: Int
+        public let windMph: Double
+        public let moonUp: Bool
+        public let fogRisk: Int           // 0 none, 1 low, 2 high
     }
 }
 
@@ -477,7 +489,12 @@ public enum SectorEngineAPI {
             regime: n.regime.rawValue, topReasons: n.topReasons,
             factors: n.factors.map {
                 NightDTO.NightFactorDTO(key: $0.key, detail: $0.detail, sub: $0.sub, weight: $0.weight)
-            })
+            },
+            hourly: n.hourly.map {
+                NightDTO.HourPointDTO(hour: $0.hour, score: $0.score, windMph: $0.windMph,
+                                      moonUp: $0.moonUp, fogRisk: $0.fogRisk)
+            },
+            moonset: n.moonset)
     }
 
     private static func pressureTrendString(_ t: PressureTrend) -> String {
