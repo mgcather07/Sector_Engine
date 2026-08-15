@@ -786,7 +786,9 @@ struct ForecastResponse: Decodable {
     // Lake's offset from UTC (timezone=auto). The hourly/daily strings are local
     // wall-clock parsed as naive-UTC, so this converts a wall-clock hour to its
     // true instant for astronomy (moon altitude / moonset in the ribbon).
-    let utc_offset_seconds: Int? = nil
+    // NOTE: `var`, not `let` — a `let` with a default is dropped from synthesized
+    // Decodable (immutable + pre-initialized), so it would never read the JSON.
+    var utc_offset_seconds: Int? = nil
 
     struct Hourly: Decodable {
         let time: [String]
@@ -794,8 +796,9 @@ struct ForecastResponse: Decodable {
         let cloud_cover: [Double?]
         let precipitation: [Double?]
         let weather_code: [Int?]
-        // Optional so a pre-update cached payload still decodes; drives fog risk.
-        let relative_humidity_2m: [Double?]? = nil
+        // `var` (not `let`) so the default doesn't drop it from synthesized
+        // Decodable; drives the ribbon's fog-risk proxy.
+        var relative_humidity_2m: [Double?]? = nil
     }
     struct Daily: Decodable {
         let time: [String]
@@ -804,9 +807,9 @@ struct ForecastResponse: Decodable {
         let wind_speed_10m_max: [Double?]
         let weather_code: [Int?]
         let precipitation_sum: [Double?]
-        // % chance of measurable rain that day. Optional so a host that omits it
-        // still decodes; nil elements are common when Open-Meteo has no POP.
-        let precipitation_probability_max: [Int?]? = nil
+        // % chance of measurable rain that day. `var` (not `let`) so the default
+        // doesn't drop it from synthesized Decodable; nil elements are common.
+        var precipitation_probability_max: [Int?]? = nil
         let cloud_cover_mean: [Double?]?
     }
 }
