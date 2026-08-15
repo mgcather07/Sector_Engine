@@ -39,9 +39,9 @@ public enum WindFactor {
     private static func why(_ mph: Double, gustPenalty: Double) -> String {
         let gusty = gustPenalty > 4 ? ", gusty" : ""
         switch mph {
-        case ..<3:   return "Slick calm — clean sightline\(gusty)"
-        case ..<7:   return "Light wind — easy to see through\(gusty)"
-        case ..<12:  return "Breezy — fish the protected banks\(gusty)"
+        case ..<4:   return "Slick calm — clean sightline\(gusty)"
+        case ..<7:   return "Light chop — surface still readable\(gusty)"
+        case ..<11:  return "Breezy — surface chopping up\(gusty)"
         case ..<15:  return "Windy — sightline suffering\(gusty)"
         case ..<20:  return "Rough — tuck into sheltered water\(gusty)"
         default:     return "Blowing hard — visibility wrecked"

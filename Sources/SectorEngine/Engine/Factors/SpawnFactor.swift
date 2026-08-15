@@ -33,6 +33,25 @@ public struct SpawnResult: Equatable {
 
 public enum SpawnFactor {
 
+    /// True when at least one legal, sight-shootable species is within (or tapering
+    /// into) its spawn window for this region/date — regardless of water temp. When
+    /// false, spawn is OUT OF SEASON: the aggregator drops it and renormalises the
+    /// rest, rather than scoring a zero that quietly costs points every winter.
+    public static func isInSeason(_ input: ConditionsInput,
+                                  config: ConditionsConfig = .default) -> Bool {
+        let cfg = config.spawn
+        let doy = dayOfYear(input.date)
+        for species in SpeciesDatabase.species(in: input.region) {
+            guard SpeciesLegality.canAutoRecommend(species) else { continue }
+            if species.tier == .tier3 { continue }
+            if !species.sightShootableSpawn { continue }
+            guard species.present(in: input.region, latitude: input.latitude, longitude: input.longitude) else { continue }
+            let m = species.window(for: input.region).membership(dayOfYear: doy, taperDays: cfg.windowTaperDays)
+            if m > 0.05 { return true }
+        }
+        return false
+    }
+
     public static func score(_ input: ConditionsInput,
                              config: ConditionsConfig = .default) -> SpawnResult {
         let cfg = config.spawn

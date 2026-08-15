@@ -40,6 +40,8 @@ public struct ConditionsResponse: Codable, Equatable {
     public let closingLine: String
     public let spawnSpeciesName: String?
     public let spawnNeedsDisclaimer: Bool
+    public let baseline: Double
+    public let dormantFactors: [DormantFactorDTO]
     public let factors: [FactorDTO]
     public let gates: [GateDTO]
     public let whereToLook: [WhereToLookDTO]
@@ -109,6 +111,14 @@ public struct FactorDTO: Codable, Equatable {
     public let weightPct: Int     // active (renormalized) weight, %
     public let label: String      // human value, e.g. "0.6 ft viz"
     public let why: String
+    public let contribution: Double  // signed points off the 50 baseline
+}
+
+/// A factor not in play tonight (spawn out of season), for the "not in play" group.
+public struct DormantFactorDTO: Codable, Equatable {
+    public let key: String
+    public let label: String
+    public let reason: String
 }
 
 public struct GateDTO: Codable, Equatable {
@@ -313,9 +323,14 @@ public enum SectorEngineAPI {
             closingLine: result.closingLine,
             spawnSpeciesName: result.spawnSpeciesName,
             spawnNeedsDisclaimer: result.spawnNeedsDisclaimer,
+            baseline: result.baseline,
+            dormantFactors: result.dormantFactors.map {
+                DormantFactorDTO(key: $0.key.rawValue, label: $0.label, reason: $0.reason)
+            },
             factors: result.factors.map {
                 FactorDTO(key: $0.key.rawValue, score: $0.score,
-                          weightPct: $0.weightPct, label: $0.label, why: $0.why)
+                          weightPct: $0.weightPct, label: $0.label, why: $0.why,
+                          contribution: $0.contribution)
             },
             gates: result.gates.map { GateDTO(reason: $0.reason, cap: $0.cap) },
             whereToLook: result.whereToLook.map {

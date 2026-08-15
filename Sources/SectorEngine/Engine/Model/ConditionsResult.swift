@@ -17,6 +17,18 @@ public struct FactorBreakdown: Equatable {
     public let weightPct: Int      // active (renormalized) weight, %
     public let label: String       // human value, e.g. "0.6 ft viz"
     public let why: String
+    /// Signed points this factor adds to the `baseline` (50) — `weight × (score −
+    /// 50)`. The breakdown reconciles: baseline + Σ contribution ≈ score. This is
+    /// what "did tonight" instead of static weight, so clients don't re-derive it.
+    public let contribution: Double
+}
+
+/// A factor that isn't in play tonight (e.g. spawn out of season) — excluded from
+/// scoring and renormalization, but surfaced so the UI can explain the dormancy.
+public struct DormantFactor: Equatable {
+    public let key: FactorKey
+    public let label: String       // e.g. "Out of season"
+    public let reason: String      // e.g. "No run — carp spawn Apr–Jun"
 }
 
 /// An active veto/cap and why it fired.
@@ -52,6 +64,13 @@ public struct ConditionsResult: Equatable {
     /// The leading spawn species (for copy/targeting), if any.
     public let spawnSpeciesName: String?
     public let spawnNeedsDisclaimer: Bool
+
+    /// The "average night" the contributions build on (50). Score breakdown shows
+    /// it as the first row so a user can add the column up.
+    public let baseline: Double
+    /// Factors excluded from tonight's scoring (e.g. spawn out of season), surfaced
+    /// for the "not in play tonight" group.
+    public let dormantFactors: [DormantFactor]
 
     /// True if any gate capped the score.
     public var isCapped: Bool { !gates.isEmpty }

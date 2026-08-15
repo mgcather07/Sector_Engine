@@ -69,8 +69,8 @@ public enum WhereToLookEngine {
                     body: "Push into newly flooded grass and timber edges — fish move up fast onto fresh forage."))
             } else if delta < -input.windowQuietBand {
                 cards.append(WhereToLookCard(
-                    kind: .level, title: "Falling water — work the drains",
-                    body: "Fish the mouths of draining flats and the first drop — receding water concentrates fish and forage."))
+                    kind: .level, title: "Falling water — work the outer edge",
+                    body: "The lake is draining and fish are sliding off the shallow flats out of range. Work the OUTER edge of the grass and the first drop, not the very back of the flat — the skinny water's emptying out."))
             }
         }
 
@@ -123,12 +123,12 @@ public enum WhereToLookEngine {
         case ..<4:
             return WhereToLookCard(kind: .wind, title: "Slick calm — cover water",
                 body: "No wind to break the glare or move shad — fish scattered, and slick water gives you no cover on the approach. Cover water and watch for surface life.")
-        case ..<12:
-            return WhereToLookCard(kind: .wind, title: "Fishable breeze (\(dir))",
-                body: "Forage stacks on the \(dir)-wind (windward) bank — fish it if you can keep a sightline; otherwise tuck into the calm, clearer lee pocket and work the scum line blown into a sheltered cove.")
+        case ..<11:
+            return WhereToLookCard(kind: .wind, title: "Go to the calm side (\(dir) wind)",
+                body: "Wind's out of the \(dir), so the upwind \(dir) shore stays glassy — short fetch, no chop. The downwind bank is where the waves build and stir the shallows muddy. You shoot THROUGH the surface, so glass beats everything: fish the calm side and skip the windward chop.")
         default:
             return WhereToLookCard(kind: .wind, title: "Get protected (\(dir) wind)",
-                body: "Wind is hurting visibility — fish the calm lee shorelines, behind islands and short-fetch banks where the surface stays readable.")
+                body: "Wind is wrecking the sightline. Fish only the calm, upwind shorelines, behind islands and short-fetch pockets where the surface still lays down flat enough to shoot through.")
         }
     }
 

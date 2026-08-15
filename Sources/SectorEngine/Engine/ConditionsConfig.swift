@@ -190,8 +190,12 @@ public struct ConditionsConfig {
     // MARK: - Wind (§5.4) — calm is best for sight-shooting
     public struct Wind {
         /// (maxMph, score) bands, ascending. Score applies up to maxMph.
+        /// Bowfishing is a SIGHT sport — you shoot through the surface, so chop is
+        /// the enemy. Under ~4 mph is genuinely prime; by 7 mph a working chop is
+        /// up and the score is a real drag (not near-prime); past ~10 mph most of
+        /// the lake is unshootable and only protected pockets stay readable.
         public var bands: [(maxMph: Double, score: Double)] = [
-            (3, 100), (7, 90), (12, 70), (15, 45), (20, 20),
+            (4, 100), (7, 68), (11, 40), (15, 18), (20, 8),
         ]
         public var aboveTopScore: Double = 5         // > last band (gate candidate)
         public var gustPenaltyMax: Double = 15
@@ -216,8 +220,12 @@ public struct ConditionsConfig {
         public var stableScore: Double = 85
         public var gentleRiseScore: Double = 100
         public var strongRiseScore: Double = 60
-        public var slowFallScore: Double = 70
-        public var fastFallScore: Double = 45
+        // Falling water is a NEGATIVE for bowfishing: you need fish up on the
+        // flats in inches of water, and a drawdown pulls them off the shallows
+        // out of range. Scored below the 50 baseline so it reads as a real drag,
+        // not the mild positive rod-fishing would give it. Rising/stable stay good.
+        public var slowFallScore: Double = 40
+        public var fastFallScore: Double = 20
     }
 
     // MARK: - Current / generation (§5.7)

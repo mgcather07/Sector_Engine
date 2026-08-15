@@ -35,10 +35,22 @@ public enum ConditionsAggregator {
             .humidity: HumidityFactor.score(input, config: config),
         ]
 
-        // Spawn participates only when we have a water temp to judge it against.
+        // Spawn participates only when we have a water temp to judge it against AND
+        // a run is actually in season. Out of season it's not a bad night, it's an
+        // inapplicable factor — scoring it zero quietly costs points every winter.
+        // Excluding it lets the weighted blend renormalise over the rest (§step 3).
         let spawnResult = SpawnFactor.score(input, config: config)
-        let spawnPresent = input.waterTempF != nil
+        let spawnInSeason = SpawnFactor.isInSeason(input, config: config)
+        let spawnPresent = input.waterTempF != nil && spawnInSeason
         if spawnPresent { scores[.spawn] = spawnResult.factor }
+
+        // Dormant factors: present in the model but not in play tonight. Surfaced
+        // so the UI can explain the dormancy instead of hiding it.
+        var dormantFactors: [DormantFactor] = []
+        if input.waterTempF != nil && !spawnInSeason {
+            dormantFactors.append(DormantFactor(key: .spawn, label: "Out of season",
+                                                reason: "No run — carp spawn Apr–Jun"))
+        }
 
         if let wt = WaterTempFactor.score(input, config: config) { scores[.waterTemp] = wt }
         if let lvl = WaterLevelFactor.score(input, config: config) { scores[.level] = lvl }
@@ -104,11 +116,16 @@ public enum ConditionsAggregator {
         let weightPctByKey = largestRemainderPercents(normWeight, keys: presentKeys)
         let factors: [FactorBreakdown] = FactorKey.allCases.compactMap { key in
             guard let fs = scores[key] else { return nil }
+            // Signed points off the 50 baseline: renormalized weight × (sub − 50).
+            // Σ contribution = weighted − 50, so baseline + Σ reconciles to the
+            // pre-gate score (a gate/ceiling shows as a separate row in the UI).
+            let contribution = (normWeight[key] ?? 0) * (Double(fs.intScore) - 50)
             return FactorBreakdown(key: key,
                                    score: fs.intScore,
                                    weightPct: weightPctByKey[key] ?? 0,
                                    label: fs.label,
-                                   why: fs.why)
+                                   why: fs.why,
+                                   contribution: contribution)
         }
 
         // 8) Top reasons — binding gate first, then strengths, then the limiter.
@@ -152,7 +169,9 @@ public enum ConditionsAggregator {
             whereToLook: cards,
             closingLine: WhereToLookEngine.closingLine,
             spawnSpeciesName: spawnPresent ? spawnResult.species?.name : nil,
-            spawnNeedsDisclaimer: spawnPresent ? spawnResult.needsDisclaimer : false)
+            spawnNeedsDisclaimer: spawnPresent ? spawnResult.needsDisclaimer : false,
+            baseline: 50,
+            dormantFactors: dormantFactors)
     }
 
     /// Whole-percent weights that sum to exactly 100. Floors each, then hands the

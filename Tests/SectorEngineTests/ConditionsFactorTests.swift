@@ -418,7 +418,7 @@ final class SimpleFactorTests: XCTestCase {
     func testWaterLevel() {
         XCTAssertEqual(WaterLevelFactor.score(CE.input(stageTrend: 0.0))?.score, 85)   // stable
         XCTAssertEqual(WaterLevelFactor.score(CE.input(stageTrend: 0.5))?.score, 100)  // gentle rise
-        XCTAssertEqual(WaterLevelFactor.score(CE.input(stageTrend: -2.0))?.score, 45)  // fast fall
+        XCTAssertEqual(WaterLevelFactor.score(CE.input(stageTrend: -2.0))?.score, 20)  // fast fall
         XCTAssertNil(WaterLevelFactor.score(CE.input(stageTrend: nil)))
     }
 
@@ -428,7 +428,7 @@ final class SimpleFactorTests: XCTestCase {
         // Pool falling fast while the nearby river gage reads flat: score the pool.
         let drawdown = WaterLevelFactor.score(CE.input(reservoirElev: 594.8, reservoirTrend: -2.0,
                                                        stageTrend: 0.0))
-        XCTAssertEqual(drawdown?.score, 45, "reservoir drawdown must score as fast fall, not neutral")
+        XCTAssertEqual(drawdown?.score, 20, "reservoir drawdown must score as fast fall, not neutral")
         // Pool trend takes precedence over the gage's disagreeing trend.
         let poolRise = WaterLevelFactor.score(CE.input(reservoirElev: 594.8, reservoirTrend: 0.5,
                                                        stageTrend: -2.0))
@@ -436,7 +436,7 @@ final class SimpleFactorTests: XCTestCase {
         // Below a dam (tailwater) the pool behind it isn't your level → use the gage.
         let tail = WaterLevelFactor.score(CE.input(isTail: true, reservoirElev: 594.8,
                                                    reservoirTrend: 0.5, stageTrend: -2.0))
-        XCTAssertEqual(tail?.score, 45, "on a tailwater the river gage trend governs, not the pool")
+        XCTAssertEqual(tail?.score, 20, "on a tailwater the river gage trend governs, not the pool")
     }
 
     /// The tonight score must resolve generation across the fishing WINDOW, not
