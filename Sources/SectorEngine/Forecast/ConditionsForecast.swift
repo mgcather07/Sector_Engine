@@ -76,6 +76,7 @@ struct NightScore: Identifiable, Equatable {
     let windMax: Double       // mph (night average)
     let weatherCode: Int      // sanitized WMO code
     let precip: Double        // inches (daily sum)
+    let precipProbability: Int?  // 0...100 % chance of rain; nil when unknown
     let factors: [ScoreFactor]
     let confidence: Int       // 0...100 — drives the far-out fade
     let regime: ConditionsRegime
@@ -83,10 +84,12 @@ struct NightScore: Identifiable, Equatable {
     var id: Date { date }
 
     init(date: Date, score: Int, moonIllumination: Double, windMax: Double,
-         weatherCode: Int, precip: Double, factors: [ScoreFactor],
+         weatherCode: Int, precip: Double, precipProbability: Int? = nil,
+         factors: [ScoreFactor],
          confidence: Int = 100, regime: ConditionsRegime = .normal, topReasons: [String] = []) {
         self.date = date; self.score = score; self.moonIllumination = moonIllumination
         self.windMax = windMax; self.weatherCode = weatherCode; self.precip = precip
+        self.precipProbability = precipProbability
         self.factors = factors; self.confidence = confidence; self.regime = regime
         self.topReasons = topReasons
     }
@@ -274,7 +277,7 @@ final class ConditionsForecastService: ObservableObject {
             URLQueryItem(name: "latitude", value: String(format: "%.4f", coordinate.latitude)),
             URLQueryItem(name: "longitude", value: String(format: "%.4f", coordinate.longitude)),
             URLQueryItem(name: "hourly", value: "wind_speed_10m,cloud_cover,precipitation,weather_code"),
-            URLQueryItem(name: "daily", value: "sunrise,sunset,wind_speed_10m_max,weather_code,precipitation_sum,cloud_cover_mean"),
+            URLQueryItem(name: "daily", value: "sunrise,sunset,wind_speed_10m_max,weather_code,precipitation_sum,precipitation_probability_max,cloud_cover_mean"),
             URLQueryItem(name: "past_days", value: "1"),
             URLQueryItem(name: "forecast_days", value: "8"),
             URLQueryItem(name: "wind_speed_unit", value: "mph"),
@@ -492,6 +495,9 @@ final class ConditionsForecastService: ObservableObject {
             guard let evening = WeatherService.parseLocalTime(r.daily.time[i] + "T21:00")
                     ?? isoDay(r.daily.time[i]) else { continue }
 
+            // Daily % chance of rain (nil when the host omits it or has no POP).
+            let pop = r.daily.precipitation_probability_max?[safe: i] ?? nil
+
             // TONIGHT is scored from the SAME live `base` the hero gauge and the
             // lake score strip use — not night-averaged forecast weather — so the
             // 7-night mini-card, the outlook sheet, the score strip and the gauge
@@ -508,7 +514,7 @@ final class ConditionsForecastService: ObservableObject {
                 nights.append(NightScore(date: evening, score: res.score,
                                          moonIllumination: base.moonIllumPct / 100,
                                          windMax: base.windMph, weatherCode: base.weatherCode,
-                                         precip: base.precipitationInchNow,
+                                         precip: base.precipitationInchNow, precipProbability: pop,
                                          factors: factors, confidence: res.confidence,
                                          regime: res.regime, topReasons: res.topReasons))
                 continue
@@ -601,6 +607,7 @@ final class ConditionsForecastService: ObservableObject {
             }
             nights.append(NightScore(date: evening, score: res.score, moonIllumination: illum,
                                      windMax: wind, weatherCode: code, precip: precip,
+                                     precipProbability: pop,
                                      factors: factors, confidence: res.confidence, regime: res.regime,
                                      topReasons: res.topReasons))
         }
@@ -679,6 +686,9 @@ struct ForecastResponse: Decodable {
         let wind_speed_10m_max: [Double?]
         let weather_code: [Int?]
         let precipitation_sum: [Double?]
+        // % chance of measurable rain that day. Optional so a host that omits it
+        // still decodes; nil elements are common when Open-Meteo has no POP.
+        let precipitation_probability_max: [Int?]?
         let cloud_cover_mean: [Double?]?
     }
 }

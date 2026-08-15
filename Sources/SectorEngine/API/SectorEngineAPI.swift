@@ -258,6 +258,7 @@ public struct NightDTO: Codable, Equatable {
     public let windMax: Double            // mph
     public let weatherCode: Int
     public let precip: Double             // inches
+    public let precipProbability: Int?    // 0…100 % chance of rain; nil when unknown
     public let confidence: Int
     public let regime: String
     public let topReasons: [String]
@@ -471,7 +472,8 @@ public enum SectorEngineAPI {
         NightDTO(
             date: n.date, score: n.score, rating: n.rating.rawValue,
             moonIllumination: n.moonIllumination, windMax: n.windMax,
-            weatherCode: n.weatherCode, precip: n.precip, confidence: n.confidence,
+            weatherCode: n.weatherCode, precip: n.precip,
+            precipProbability: n.precipProbability, confidence: n.confidence,
             regime: n.regime.rawValue, topReasons: n.topReasons,
             factors: n.factors.map {
                 NightDTO.NightFactorDTO(key: $0.key, detail: $0.detail, sub: $0.sub, weight: $0.weight)
