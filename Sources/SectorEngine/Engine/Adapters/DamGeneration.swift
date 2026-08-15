@@ -29,9 +29,12 @@ enum GenerationOperator: String, Equatable {
     /// pool, tailwater, and outflow. Covers the USACE projects outside the
     /// TVA/SWPA marketing areas — the majority of dam lakes in the directory.
     case usace = "USACE"
+    /// Alabama Power — its 14 Coosa/Tallapoosa/Black-Warrior hydro dams, with a
+    /// published unit schedule + current flow/level (via apcshorelines.com).
+    case apc = "APC"
 
     /// Shown next to the dam name in the sheet header.
-    var label: String { rawValue }
+    var label: String { self == .apc ? "Alabama Power" : rawValue }
 }
 
 /// A generating dam, from whichever operator publishes it.
@@ -239,7 +242,7 @@ final class GenerationService {
     private init() {}
 
     private var providers: [GenerationProvider] {
-        [TVAGenerationService.shared, SWPAGenerationService.shared]
+        [TVAGenerationService.shared, SWPAGenerationService.shared, AlabamaPowerGenerationService.shared]
     }
 
     /// How far to look for the dam that governs this water.
