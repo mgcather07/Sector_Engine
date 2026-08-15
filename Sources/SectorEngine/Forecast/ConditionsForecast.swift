@@ -648,9 +648,11 @@ final class ConditionsForecastService: ObservableObject {
                                     coordinate: CLLocationCoordinate2D, cal: Calendar,
                                     config: ConditionsConfig) -> (points: [HourPoint], moonset: Date?) {
         let lat = coordinate.latitude, lon = coordinate.longitude
-        // Anchor 8 PM on the evening's calendar day (evening itself is ~21:00).
-        let dayStart = cal.startOfDay(for: evening)
-        guard let start = cal.date(byAdding: .hour, value: 20, to: dayStart) else { return ([], nil) }
+        // Anchor 8 PM LOCAL. `evening` is 9 PM local (parsed from Open-Meteo's
+        // timezone=auto feed), so 8 PM is one hour before — derived from the
+        // instant, NOT cal.startOfDay, which on the server (UTC) would put the
+        // window 5 h off and label the ribbon 3 PM–12 AM.
+        let start = evening.addingTimeInterval(-3600)
 
         func sample(near t: Date) -> HourSample? {
             guard let nearest = hourly.min(by: {
