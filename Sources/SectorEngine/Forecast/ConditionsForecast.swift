@@ -111,12 +111,12 @@ struct NightScore: Identifiable, Equatable {
         self.hourly = hourly; self.moonset = moonset
     }
 
-    /// Banding aligned with the gauge (ConditionsBand: 80/60/40).
+    /// Banding aligned with the gauge (ConditionsBand: Prime 80 / Good 65 / Fair 50).
     var rating: BowfishingConditionsResult.Rating {
         switch score {
         case 80...:   return .prime
-        case 60..<80: return .good
-        case 40..<60: return .fair
+        case 65..<80: return .good
+        case 50..<65: return .fair
         default:      return .poor
         }
     }
