@@ -318,6 +318,7 @@ public enum SectorEngineAPI {
             waterTempC: snap.waterTemp, modeledWaterTempF: snap.waterTempModel?.currentF,
             turbidity: snap.turbidity, generation: snap.generation,
             alertWindFloorMph: snap.alertWindFloorMph,
+            severeWarningLabel: snap.severeWarningLabel,
             rainWatershed72hIn: snap.mrms?.watershed72hIn)
         // Tuning comes from Firebase Remote Config (cached; falls back to the
         // compiled defaults). Change a weight in the console → both phones see it.
@@ -384,6 +385,7 @@ public enum SectorEngineAPI {
             waterTempC: snap.waterTemp, modeledWaterTempF: snap.waterTempModel?.currentF,
             turbidity: snap.turbidity, generation: snap.generation,
             alertWindFloorMph: snap.alertWindFloorMph,
+            severeWarningLabel: snap.severeWarningLabel,
             rainWatershed72hIn: snap.mrms?.watershed72hIn)
         let result = ConditionsAggregator.evaluate(input, config: await RemoteConfigStore.shared.current())
         return (result.score, result.band.rawValue)

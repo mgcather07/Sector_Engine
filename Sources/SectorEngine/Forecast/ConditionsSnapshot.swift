@@ -56,6 +56,13 @@ struct ConditionsSnapshot {
     /// A live warning outranks the smoothed forecast wind (a Severe Thunderstorm
     /// Warning = 58+ mph gusts NOW that Open-Meteo's hourly often misses).
     var alertWindFloorMph: Double? { alerts.compactMap(\.impliedWindFloorMph).max() }
+
+    /// The most-urgent active safety WARNING (tornado / severe thunderstorm / flash
+    /// flood / marine) covering the point, if any — feeds the storm safety gate so
+    /// a warned night can never read Prime, even when the forecast model missed the
+    /// storm entirely. `alerts` is sorted most-severe-first, so the first match is
+    /// the one to surface as the binding "why".
+    var severeWarningLabel: String? { alerts.first(where: { $0.impliesUnsafeToFish })?.event }
 }
 
 /// Serialises and caches the shared fetch. An actor so concurrent callers

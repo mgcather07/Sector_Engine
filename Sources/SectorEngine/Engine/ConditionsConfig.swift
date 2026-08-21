@@ -312,6 +312,17 @@ public struct ConditionsConfig {
         public var stormCap: Double = 30
         public var stormMinCloudPct: Double = 70    // cloud ≥ this corroborates a storm code
         public var stormMinPrecipInch: Double = 0.001  // any measurable precip corroborates
+        /// Active NWS safety WARNING (tornado / severe thunderstorm / flash flood /
+        /// marine) — you don't launch under one whatever the forecast says. A
+        /// meteorologist issued it for something happening NOW that the forecast
+        /// model routinely misses, so it's authoritative and hard-caps to Poor.
+        public var severeWarningCap: Double = 25
+        /// Rain measurably falling NOW, independent of the (often-wrong) categorical
+        /// code. The storm gate above needs a 95/96/99 code AND corroboration; this
+        /// catches active rain the code mislabels. Deliberately conservative so a
+        /// passing drizzle doesn't tank an otherwise-good night.
+        public var rainNowInch: Double = 0.10
+        public var rainNowCap: Double = 40
     }
 
     // MARK: - Spawn boost (§7.3)
