@@ -71,6 +71,33 @@ final class ConditionsAggregatorTests: XCTestCase {
         XCTAssertTrue(low.whereToLook.contains { $0.title.contains("roaming") || $0.body.contains("roam") })
     }
 
+    // 6b. Severe-weather safety gate: an active NWS warning caps a Prime-looking
+    // night. This is the fix for the score reading 81/PRIME with a squall line
+    // overhead — the forecast-only storm gate missed it; a warning does not.
+    func test06b_severeWarningGate() {
+        // Dark, calm, clear, warm water — would otherwise score Good/Prime.
+        let base = CE.input(wind: 2, waterTemp: 78, moonIllum: 0, cloud: 15)
+        let clear = eval(base)
+        XCTAssertGreaterThanOrEqual(clear.score, 65)
+        let warned = eval(CE.input(wind: 2, waterTemp: 78, moonIllum: 0, cloud: 15,
+                                   severeWarning: "Severe Thunderstorm Warning"))
+        XCTAssertLessThanOrEqual(warned.score, 30)
+        XCTAssertLessThan(warned.score, clear.score)
+        XCTAssertTrue(warned.primaryGate?.reason.contains("Severe Thunderstorm Warning") ?? false)
+    }
+
+    // 6c. Code-independent rain gate: rain measurably falling NOW caps the night
+    // even when the categorical weather code isn't a storm code (Open-Meteo's code
+    // routinely mislabels or lags active rain).
+    func test06c_rainNowGate() {
+        // weatherCode 3 (overcast) is NOT a storm code, so the storm gate can't fire.
+        let dry = eval(CE.input(wind: 2, waterTemp: 78, moonIllum: 0, cloud: 20, weatherCode: 3, precipNow: 0))
+        XCTAssertGreaterThanOrEqual(dry.score, 65)
+        let raining = eval(CE.input(wind: 2, waterTemp: 78, moonIllum: 0, cloud: 20, weatherCode: 3, precipNow: 0.2))
+        XCTAssertLessThanOrEqual(raining.score, 40)
+        XCTAssertTrue(raining.primaryGate?.reason.contains("Rain falling now") ?? false)
+    }
+
     // 7. Algal vs sediment: same FNU, algal scores worse (~2× visibility hit).
     func test07_algalVsSediment() {
         let algal = eval(CE.input(turbidity: 40, turbType: .algal))

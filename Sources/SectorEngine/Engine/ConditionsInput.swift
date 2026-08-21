@@ -33,6 +33,11 @@ public struct ConditionsInput: Equatable {
     public var pressureChange12hInHg: Double // signed
     public var weatherCode: Int             // WMO code (sky factor) — already sanitized
     public var precipitationInchNow: Double // measured precip right now (storm-gate corroboration)
+    /// Active NWS safety WARNING covering the point (tornado / severe thunderstorm /
+    /// flash flood / marine) — the event name, for the gate reason; nil when none.
+    /// Authoritative real-time signal that hard-caps the score even when the
+    /// forecast reads clean (the model routinely misses a fast-developing storm).
+    public var severeWarningLabel: String?
     /// City light pollution near the spot (0 = pristine dark, 1 = heavy skyglow).
     /// Drives whether cloud cancels the moon or reflects city glow. §5.3.
     public var cityGlowFactor: Double
@@ -105,6 +110,7 @@ public struct ConditionsInput: Equatable {
                 pressureChange12hInHg: Double,
                 weatherCode: Int,
                 precipitationInchNow: Double = 0,
+                severeWarningLabel: String? = nil,
                 cityGlowFactor: Double,
                 waterTempF: Double? = nil,
                 waterTempEstimated: Bool = false,
@@ -150,6 +156,7 @@ public struct ConditionsInput: Equatable {
         self.pressureChange12hInHg = pressureChange12hInHg
         self.weatherCode = weatherCode
         self.precipitationInchNow = precipitationInchNow
+        self.severeWarningLabel = severeWarningLabel
         self.cityGlowFactor = cityGlowFactor
         self.waterTempF = waterTempF
         self.waterTempEstimated = waterTempEstimated

@@ -67,6 +67,22 @@ struct WeatherAlert: Identifiable, Equatable {
         if e.contains("special marine") { return 39 }   // ~34 kt
         return nil
     }
+
+    /// True when this active WARNING makes being out on the water dangerous — the
+    /// score must be capped no matter how good the forecast reads. This is the
+    /// authoritative real-time signal: a meteorologist has issued a warning for
+    /// something happening NOW that the forecast model routinely misses (a
+    /// fast-developing squall line is why a night can score Prime with a storm
+    /// overhead). WATCHES don't count — "possible", not "occurring"; only issued
+    /// warnings. Non-convective advisories (heat, dense fog, etc.) don't qualify.
+    var impliesUnsafeToFish: Bool {
+        let e = event.lowercased()
+        guard e.contains("warning") else { return false }
+        return e.contains("tornado") || e.contains("severe thunderstorm")
+            || e.contains("flash flood") || e.contains("special marine")
+            || e.contains("extreme wind") || e.contains("hurricane")
+            || e.contains("tropical storm")
+    }
 }
 
 // MARK: - Service

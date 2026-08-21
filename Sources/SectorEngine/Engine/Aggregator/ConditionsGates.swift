@@ -53,6 +53,22 @@ public enum ConditionsGates {
             hits.append(GateHit(reason: "Thunderstorms",
                                 cap: Int(g.stormCap)))
         }
+        // Active NWS safety WARNING — the authoritative real-time catch. The
+        // forecast-only storm gate above missed the case that started all this: a
+        // squall line overhead while the model still read "winding down, dry", so
+        // the night scored Prime. A human meteorologist issuing a warning is the
+        // signal that survives the model miss, so cap hard whenever one is active.
+        if let label = input.severeWarningLabel {
+            hits.append(GateHit(reason: "\(label) — stay off the water",
+                                cap: Int(g.severeWarningCap)))
+        }
+        // Rain measurably falling NOW, independent of the categorical code — the
+        // code often mislabels active rain (or lags it), so cap on the measured
+        // current precip too, not just a 95/96/99 storm code.
+        if input.precipitationInchNow >= g.rainNowInch {
+            hits.append(GateHit(reason: "Rain falling now — \(String(format: "%.2f", input.precipitationInchNow))\"",
+                                cap: Int(g.rainNowCap)))
+        }
         return hits
     }
 }

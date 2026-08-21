@@ -61,6 +61,7 @@ public enum ConditionsInputBuilder {
                       turbidity: WaterLevelReading?,
                       generation: DamGeneration? = nil,
                       alertWindFloorMph: Double? = nil,
+                      severeWarningLabel: String? = nil,
                       forecastDayIndex: Int = 0,
                       cityGlow: Double? = nil,
                       rainWatershed72hIn: Double? = nil) -> ConditionsInput {
@@ -223,6 +224,7 @@ public enum ConditionsInputBuilder {
             pressureChange12hInHg: (weather?.pressureChange ?? 0) * hPaToInHg,
             weatherCode: weather?.weatherCode ?? 0,
             precipitationInchNow: weather?.precipitation ?? 0,
+            severeWarningLabel: severeWarningLabel,
             cityGlowFactor: cityGlow ?? defaultCityGlow,
             waterTempF: waterTempF,
             waterTempEstimated: waterTempEstimated,
