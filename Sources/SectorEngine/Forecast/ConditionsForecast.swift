@@ -499,10 +499,16 @@ final class ConditionsForecastService: ObservableObject {
         var nights: [NightScore] = []
         let lat = coordinate.latitude, lon = coordinate.longitude
 
-        // `past_days=1` puts yesterday at index 0 — start at today.
+        // `past_days=1` puts yesterday at index 0 — start at the LOCATION's local
+        // today. Open-Meteo's `daily.time` is in the location's local dates, but
+        // `.current` is UTC on Cloud Run — so in a US evening (UTC already rolled
+        // to tomorrow) this picked tomorrow's date and the outlook skipped tonight,
+        // starting a day ahead. Render `now` in the location's own timezone
+        // (Open-Meteo's utc_offset) so the comparison is local-vs-local.
+        let locationTZ = TimeZone(secondsFromGMT: r.utc_offset_seconds ?? 0) ?? .current
         let todayStr: String = {
             let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
-            f.dateFormat = "yyyy-MM-dd"; f.timeZone = .current
+            f.dateFormat = "yyyy-MM-dd"; f.timeZone = locationTZ
             return f.string(from: now)
         }()
         let startIdx = r.daily.time.firstIndex(where: { $0 >= todayStr }) ?? 0
